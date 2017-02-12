@@ -1,18 +1,8 @@
 #!/usr/bin/env python
 
-# Copyright 2016 Google Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# MKT625 - Survey of Ad Tech
+# Bradford Lynch, 2017
+# Ann Arbor, MI
 
 # [START imports]
 import os
@@ -23,6 +13,7 @@ from google.appengine.ext import ndb
 
 import jinja2
 import webapp2
+import numpy as np
 
 JINJA_ENVIRONMENT = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
@@ -30,23 +21,211 @@ JINJA_ENVIRONMENT = jinja2.Environment(
     autoescape=True)
 # [END imports]
 
+# Data Models
+class Participant(ndb.Model):
+    """Sub model for representing an author."""
+    date = ndb.DateTimeProperty(auto_now_add=True)
+    ad_cats = ndb.StringProperty(indexed=False)
+    products = ndb.StringProperty(indexed=False)
+    ad = ndb.StringProperty(indexed=False)
+    ad_type = ndb.StringProperty(indexed=False)
+    primed = ndb.BooleanProperty(indexed=False)
+    browser_size = ndb.StringProperty(indexed=False)
+    mouse_x_pos = ndb.TextProperty()
+    mouse_y_pos = ndb.TextProperty()
+    result = ndb.StringProperty(indexed=False)
 
-# We set a parent key on the 'Greetings' to ensure that they are all
-# in the same entity group. Queries across the single entity group
-# will be consistent. However, the write rate should be limited to
-# ~1/second.
+# Globals
+ad_categories = ['Air Travel', 'Food and Drinks', 'TV Shows', 'None of the above']
+products = ['Eyewear', 'Headphones', "Women's Fashion", "Men's Fashion", 'Soda', 'None of these products']
+ads = {
+    'Air Travel':'delta',
+    'Food and Drinks':'delta',
+    'TV Shows':'delta'
+}
+t_show = 100
+t_hide = 2500
+
+# Helper functions
+def pickAd(interests):
+    if len(interests) == 0:
+        cats = [cat for cat in ad_categories if 'None' not in cat]
+        ad_cat = cats[np.random.randint(0,len(cats))]
+    else:
+        cats = [cat for cat in interests if 'None' not in cat]
+        ad_cat = cats[np.random.randint(0,len(cats))]
+
+    ad_type = np.random.rand()
+    if ad_type > 0.3333333:
+        ad_type = 'new'
+    else:
+        ad_type = 'old'
+
+    primed = np.random.rand()
+    if primed > 0.5:
+        primed = True
+    else:
+        primed = False
+
+    return ad_cat, ad_type, primed
+
 
 # [START main_page]
 class MainPage(webapp2.RequestHandler):
 
     def get(self):
-        template = JINJA_ENVIRONMENT.get_template('example_delta.html')
-        self.response.write(template.render())
+        template_values = {
+            'ad_cats':ad_categories,
+            'products':products
+        }
+        template = JINJA_ENVIRONMENT.get_template('index.html')
+        self.response.write(template.render(template_values))
+
+    def post(self):
+        sub_ad_cats = {}
+        sub_prods = {}
+        interests = []
+
+        for cat in ad_categories:
+            val = self.request.get(cat)
+            if val == 'on':
+                sub_ad_cats[cat] = True
+                interests.append(cat)
+            else:
+                sub_ad_cats[cat] = False
+
+        for prod in products:
+            val = self.request.get(prod)
+            if val == 'on':
+                sub_prods[prod] = True
+            else:
+                sub_prods[prod] = False
+
+
+        abDecisions = pickAd(interests)
+        ad = ads[abDecisions[0]]
+        surveyRes = Participant()
+        surveyRes.ad_cats = str(sub_ad_cats)
+        surveyRes.products = str(sub_prods)
+        surveyRes.ad, surveyRes.ad_type, surveyRes.primed = abDecisions
+        surveyResKey = surveyRes.put()
+
+        #test = Participant.query(ancestor=foo).fetch()
+
+        template_values = {
+            'user':surveyResKey,
+            'user_id':surveyResKey.urlsafe(),
+            'ad':ad,
+            'ad_type':abDecisions[1],
+            'sub_ad_timing':'{"show":%d, "hide":%d}' % (t_show, t_hide)
+        }
+
+        # Send them to the intro if they should be primed about the tech
+        if abDecisions[2]:
+            template = JINJA_ENVIRONMENT.get_template('intro_to_tech.html')
+        else:
+            template = JINJA_ENVIRONMENT.get_template(ad + '.html')
+
+        self.response.write(template.render(template_values))
+
+
 # [END main_page]
+
+class ShowAd(webapp2.RequestHandler):
+
+    def post(self):
+        user_id = self.request.get('user_id')
+        ad = self.request.get('ad')
+        ad_type = self.request.get('ad_type')
+
+        template_values = {
+            'user_id':user_id,
+            'ad_type':ad_type,
+            'sub_ad_timing':'{"show":%d, "hide":%d}' % (t_show, t_hide)
+        }
+
+        template = JINJA_ENVIRONMENT.get_template(ad + '.html')
+        self.response.write(template.render(template_values))
+
+class Click(webapp2.RequestHandler):
+
+    def post(self):
+        user_id = self.request.get('user_id')
+        mouse_x_pos = self.request.get('xs')
+        mouse_y_pos = self.request.get('ys')
+        click = self.request.get('click')
+        browser = self.request.get('browser_size')
+
+        # Get user data object from ndb
+        user_key = ndb.Key(urlsafe=user_id)
+        user = user_key.get()
+
+        # Save ad survey results
+        user.browser_size = browser
+        user.mouse_x_pos = mouse_x_pos
+        user.mouse_y_pos = mouse_y_pos
+        user.result = click
+        user.put()
+
+        template_values = {
+            'user_id':user_id,
+            'sub':(browser, click, mouse_x_pos)
+        }
+
+        template = JINJA_ENVIRONMENT.get_template('submission.html')
+        self.response.write(template.render(template_values))
+
+class AdTech(webapp2.RequestHandler):
+
+    def get(self):
+        template = JINJA_ENVIRONMENT.get_template('intro_to_tech.html')
+        self.response.write(template.render())
+
+class Delta(webapp2.RequestHandler):
+
+    def get(self):
+        template_values = {
+            'user_id':000,
+            'ad_type':'new',
+            'sub_ad_timing':'{"show":%d, "hide":%d}' % (t_show, t_hide)
+        }
+
+        template = JINJA_ENVIRONMENT.get_template('delta.html')
+        self.response.write(template.render(template_values))
+
+class Pepsi(webapp2.RequestHandler):
+
+    def get(self):
+        template_values = {
+            'user_id':000,
+            'ad_type':'new',
+            'sub_ad_timing':'{"show":%d, "hide":%d}' % (t_show, t_hide)
+        }
+
+        template = JINJA_ENVIRONMENT.get_template('pepsi.html')
+        self.response.write(template.render(template_values))
+
+class TBBT(webapp2.RequestHandler):
+
+    def get(self):
+        template_values = {
+            'user_id':000,
+            'ad_type':'new',
+            'sub_ad_timing':'{"show":%d, "hide":%d}' % (t_show, t_hide)
+        }
+
+        template = JINJA_ENVIRONMENT.get_template('tbbt.html')
+        self.response.write(template.render(template_values))
 
 
 # [START app]
 app = webapp2.WSGIApplication([
     ('/', MainPage),
+    ('/submit', ShowAd),
+    ('/intro_to_tech', AdTech),
+    ('/click', Click),
+    ('/delta', Delta),
+    ('/pepsi', Pepsi),
+    ('/tbbt', TBBT),
 ], debug=True)
 # [END app]
