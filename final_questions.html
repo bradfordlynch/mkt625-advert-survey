@@ -44,15 +44,42 @@
     <div class="container">
 
       <div class="jumbotron">
-        <h3>Welcome!</h3>
-        <p>We are students studying advertising. This survey will ask you a few questions and then show you an ad. Please explore and click on ads as you usually would.</p>
-        <p>A survey code for MTurk will be provided upon completion.</p>
+        <form name='survey' class="form-horizontal" action="/final?user_id={{user_id}}" method="post">
+          <input type="hidden" name="responses" value="">
+          <div class="form-group">
+            <label for="ques_9">What is your age?</label>
+            <select class="form-control" id="sel0">
+              <option>Select from list</option>
+              <option>Less than 18 years old</option>
+              <option>18-24 years old</option>
+              <option>25-30 years old</option>
+              <option>31-40 years old</option>
+              <option>40+ years old</option>
+            </select>
+          </div>
 
+          <div class="form-group">
+            <label for="ques_10">What is your gender?</label>
+            <select class="form-control" id="sel1">
+              <option>Select from list</option>
+              <option>Male</option>
+              <option>Female</option>
+              <option>Other</option>
+            </select>
+          </div>
 
-        <form class="form-horizontal" action="/intro" method="get">
+          <div class="form-group">
+            <label for="ques_11">What type of environment do you most identify with?</label>
+            <select class="form-control" id="sel2">
+              <option>Select from list</option>
+              <option>Urban</option>
+              <option>Rural</option>
+            </select>
+          </div>
+
         	<div class="form-group">
         		<div class="col-sm-10 col-sm-offset-2"> <!--New div, offset because there is no label -->
-        			<button type="submit" class="btn btn-primary">Next</button>
+        			<button id='submit' type="submit" class="btn btn-danger">Please answer all of the questions</button>
         		</div>
         	</div>
 
@@ -71,6 +98,41 @@
     <script src="/bootstrap/js/bootstrap.min.js"></script>
     <!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
     <script src="/assets/js/ie10-viewport-bug-workaround.js"></script>
+
+    <script>
+    var submit = document.getElementById("submit");
+    var complete = false;
+    var maybeDone = true;
+
+    submit.setAttribute('disabled', true);
+    var id;
+    var i_ques = 2;
+
+    id = setInterval(function() {
+        if(complete) {
+            var responses = "{"
+            for (i=0; i <= i_ques; i++) {
+              var ques_res = document.getElementById("sel" + i.toString());
+              responses = responses + 'ques_' + i.toString() + ":" + ques_res.value + ",";
+            };
+            responses = responses + "}";
+            document.survey.responses.value = responses;
+            submit.innerHTML = "Submit";
+            submit.className = "btn btn-success";
+            submit.removeAttribute('disabled');
+            clearInterval(id);
+        } else {
+            maybeDone = true;
+            for (i=0; i <= i_ques; i++) {
+              var ques_res = document.getElementById("sel" + i.toString());
+              if (ques_res.value == 'Select from list') { maybeDone = false; break; };
+            }
+            if (maybeDone) {
+              complete = true;
+            };
+          };
+        }, 100);
+    </script>
     <script>
   (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
   (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
