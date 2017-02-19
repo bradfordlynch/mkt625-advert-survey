@@ -76,6 +76,12 @@ def pickAd(interests):
 
     return ad_cat, ad_type, primed
 
+def gql_json_parser(query_obj):
+    result = []
+    for entry in query_obj:
+        result.append(dict([(p, unicode(getattr(entry, p))) for p in entry.properties()]))
+    return result
+
 
 # [START main_page]
 class MainPage(webapp2.RequestHandler):
@@ -242,8 +248,7 @@ class DumpData(webapp2.RequestHandler):
 
     def get(self):
         qry = Participant.query().fetch()
-        pickledData = pickle.dumps(qry)
-        self.response.write(pickledData)
+        self.response.write(gql_json_parser(qry))
 
 class Delta(webapp2.RequestHandler):
 
