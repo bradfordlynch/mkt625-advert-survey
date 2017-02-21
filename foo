@@ -1,6 +1,0 @@
-Error in query string: Error processing job
-'mkt625-hello-world:bqjob_r2eccc46c88a5eb7a_0000015a53aa1dfd_1': Encountered "
-"-" "- "" at line 1, column 21.
-Was expecting:
-<EOF>
-
